@@ -18,7 +18,9 @@ O projeto envolve:
   - Armazenamento e processamento dos dados obtidos.
 
 **Status do Projeto**
+
 Em desenvolvimento – Novas funcionalidades e melhorias estão sendo adicionadas continuamente.
 
  **Autores**
+ 
 Este projeto é parte de um trabalho de Iniciação Científica desenvolvido por Diogo Moraes, Diogo Cajueiro e João Neto pela UFPE, sob orientação de Professor Saulo Dornellas.
