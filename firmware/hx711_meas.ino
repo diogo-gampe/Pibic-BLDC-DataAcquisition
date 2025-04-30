@@ -1,93 +1,34 @@
-
 #include <Arduino.h>
+#include "plataforma.h"
 
+//variável para contar medições obtidas
+uint8_t i = 0;
+//vetor para armazenar medições de 6 células de carga
+signed long medicoes[NUM_MEDICOES] = {0, 0, 0, 0, 0};
 
-#define DATAPIN_1 PB12
-#define SCKPIN_1 PB13
+//variáveis para indicar que o hx711 indicou que está pronto para transmitir o dado
+bool enData1 = false;
+bool enData2 = false;
+bool enData3 = false;
+bool enData4 = false;
+bool enData5 = false;
+bool enData6 = false;
 
-#define DATAPIN_2
-#define SCKPIN_2
+//declarando objeto de celula de carga com seus respectivos pinos de dado e clock
+//função do construtor já declara pinos como saída/entrada
+Cel_Carga celula1(DATAPIN_1, SCKPIN_1); 
+Cel_Carga celula2(DATAPIN_2, SCKPIN_2); 
+Cel_Carga celula3(DATAPIN_3, SCKPIN_3); 
+Cel_Carga celula4(DATAPIN_4, SCKPIN_4); 
+Cel_Carga celula5(DATAPIN_5, SCKPIN_5);
+Cel_Carga celula6(DATAPIN_6, SCKPIN_6); 
 
-#define DATAPIN_3
-#define SCKPIN_3
-
-#define DATAPIN_4
-#define SCKPIN_4
-
-#define DATAPIN_5
-#define SCKPIN_5
-
-#define DATAPIN_6
-#define SCKPIN_6
-
-#define NUM_MEDICOES 6
-
-
-
-uint8_t i = 0; 
-
-int pesos[NUM_MEDICOES] = {0, 100, 200, 400, 500}; //pesos de calibração em gramas
-signed long medicoes[NUM_MEDICOES] = {0, 0, 0, 0, 0}; //medições obtidas
-
-bool enData1, enData2, enData3, enData4, enData5, enDat6;
-
-signed long convert24bitstoLong(signed long value24bits){
-
-  value24bits  &= (0x00FFFFFF); //considera somente 24 bits menos significativos
-
-  //se for valor negativo faz extensão de sinal
-  if(value24bits & 0x00800000){ 
-
-    //preenche bits mais signficativos para manter valor decimal
-    return (value24bits |= 0xFF000000); 
-
-  }
-  else{
-    return value24bits;
-  }
-
-}
-
-signed long Read_Raw24bits(uint8_t datapin, uint8_t sckpin){
-    //seta contagem para 0
-    signed long Count = 0;
-
-    //Verifica se pino de dados está em 0 para indicar que está pronto para transmitir
-    if(!digitalRead(datapin)){
-    
-    //seta pino de clock para low para começar a puxar dados
-    digitalWrite(sckpin, LOW);
-    delayMicroseconds(1);
-
-    //envia 24 pulsos para retirar bit a bit
-    for (char i=0; i < 24; i++){
-
-        digitalWrite(sckpin, HIGH);
-        delayMicroseconds(1);
-        Count = Count << 1;
-
-        //incrementa contagem se datapin alto
-        if(digitalRead(datapin)) 
-            Count++; 
-
-        digitalWrite(sckpin, LOW);
-        delayMicroseconds(1);
-        
-            
-    }
-    digitalWrite(sckpin, HIGH);
-    delayMicroseconds(1); 
-    Count=Count^0x800000;
-    digitalWrite(sckpin, LOW);
-    }
-
-    return(Count);
-
-}
-
+//função para ser executada na interrupção
 void getDataRequest(void){
 
-//se qu
+
+  //verifica os pinos que estão em estado lógico zero para identificar quais estão prontos
+  //para transmitir
   if(!DATAPIN_1){
     enData1 = true; 
   }
@@ -107,77 +48,84 @@ void getDataRequest(void){
  if(!DATAPIN_6){
     enData6 = true; 
  }
-
-
+ return; 
 }
-
 
 // the setup function runs once when you press reset or power the board
 void setup() {
-  // initialize digital pin LED_BUILTIN as an output.
+
+  //inicializa led
   pinMode(LED_BUILTIN, OUTPUT);
-  pinMode(DATAPIN, INPUT);
-  pinMode(SCKPIN, OUTPUT);
+  
+  //declara pinos de interrupção na borda de descida, para chamar função getDataRequest
+  attachInterrupt(digitalPinToInterrupt(DATAPIN_1), getDataRequest, FALLING);
+  attachInterrupt(digitalPinToInterrupt(DATAPIN_2), getDataRequest, FALLING);
+  attachInterrupt(digitalPinToInterrupt(DATAPIN_3), getDataRequest, FALLING);
+  attachInterrupt(digitalPinToInterrupt(DATAPIN_4), getDataRequest, FALLING);
+  attachInterrupt(digitalPinToInterrupt(DATAPIN_5), getDataRequest, FALLING);
+  attachInterrupt(digitalPinToInterrupt(DATAPIN_6), getDataRequest, FALLING);
 
-  attachInterrupt(digitalPinToInterrupt(DATAPIN_1), getDataRequest(), FALLING);
-  attachInterrupt(digitalPinToInterrupt(DATAPIN_2), getDataRequest(), FALLING);
-  attachInterrupt(digitalPinToInterrupt(DATAPIN_3), getDataRequest(), FALLING);
-  attachInterrupt(digitalPinToInterrupt(DATAPIN_4), getDataRequest(), FALLING);
-  attachInterrupt(digitalPinToInterrupt(DATAPIN_5), getDataRequest(), FALLING);
-  attachInterrupt(digitalPinToInterrupt(DATAPIN_6), getDataRequest(), FALLING);
-
-
+  //inicializa Serial
   Serial.begin(115200);
   Serial.println("Iniciando processo de medição...");
 }
 
 // the loop function runs over and over again forever
 void loop() {
- 
+  
+  //verifica quais dados estão prontos para começar o processo de transferência de dados
   if(enData1){
-    medicoes[0] = digitalRead(convert24bitstoLong(Read_Raw24bits(DATAPIN_1, SCKPIN_1)));
+
+    //armazena valor digital bruto com extensão de sinal no vetor medicoes[]
+    medicoes[0] = convert24bitstoLong(celula1.readRaw());
+
+    //ao armazenar a medição desabilita interrupção do pino
+    //aguarda obter uma medição de cada celula de carga para reestabelecer as interrupções
+    detachInterrupt(digitalPinToInterrupt(DATAPIN_1));
+
+    //incrementa variável para indicar o número de células que já armazenaram uma medição
     i++;
   }
 
   
   if(enData2){
-    medicoes[1] = digitalRead(convert24bitstoLong(Read_Raw24bits(DATAPIN_2, SCKPIN_2)));
+    medicoes[1] = convert24bitstoLong(celula2.readRaw());
+    detachInterrupt(digitalPinToInterrupt(DATAPIN_2));
     i++;
   }
  
  
   if(enData3){
-    medicoes[2] = digitalRead(convert24bitstoLong(Read_Raw24bits(DATAPIN_3, SCKPIN_3)));
+    medicoes[2] = convert24bitstoLong(celula3.readRaw());
+    detachInterrupt(digitalPinToInterrupt(DATAPIN_3));
     i++;
   }
  
   if(enData4){
-    medicoes[3]] = digitalRead(convert24bitstoLong(Read_Raw24bits(DATAPIN_4, SCKPIN_4)));
+    medicoes[3] = convert24bitstoLong(celula4.readRaw());
+    detachInterrupt(digitalPinToInterrupt(DATAPIN_4));
     i++;
   }
   
   
   if(enData5){
-    medicoes[4] = digitalRead(convert24bitstoLong(Read_Raw24bits(DATAPIN_5, SCKPIN_5)));
+    medicoes[4] = convert24bitstoLong(celula5.readRaw());
+    detachInterrupt(digitalPinToInterrupt(DATAPIN_5));
     i++;
   }
  
   if(enData6){
-    medicoes[5] = digitalRead(convert24bitstoLong(Read_Raw24bits(DATAPIN_6, SCKPIN_6)));
+    medicoes[5] = convert24bitstoLong(celula6.readRaw());
+    detachInterrupt(digitalPinToInterrupt(DATAPIN_6));
     i++;
   }
 
+  //se forem efetuadas 6 medições transmite vetor por serial, reestabelece as interrupções e reseta variáveis
   if(i >= NUM_MEDICOES - 1){
 
-    detachInterrupt(digitalPinToInterrupt(DATAPIN_1), getDataRequest(), FALLING);
-    detachInterrupt(digitalPinToInterrupt(DATAPIN_2), getDataRequest(), FALLING);
-    detachInterrupt(digitalPinToInterrupt(DATAPIN_3), getDataRequest(), FALLING);
-    detachInterrupt(digitalPinToInterrupt(DATAPIN_4), getDataRequest(), FALLING);
-    detachInterrupt(digitalPinToInterrupt(DATAPIN_5), getDataRequest(), FALLING);
-    detachInterrupt(digitalPinToInterrupt(DATAPIN_6), getDataRequest(), FALLING);
 
     for(uint8_t j = 0; j < NUM_MEDICOES - 1; j++){
-      Serialprintln(medicoes[j]);
+      Serial.println(medicoes[j]);
     }
 
     enData1 = false;
@@ -187,13 +135,11 @@ void loop() {
     enData5 = false;
     enData6 = false;
 
-    attachInterrupt(digitalPinToInterrupt(DATAPIN_1), getDataRequest(), FALLING);
-    attachInterrupt(digitalPinToInterrupt(DATAPIN_2), getDataRequest(), FALLING);
-    attachInterrupt(digitalPinToInterrupt(DATAPIN_3), getDataRequest(), FALLING);
-    attachInterrupt(digitalPinToInterrupt(DATAPIN_4), getDataRequest(), FALLING);
-    attachInterrupt(digitalPinToInterrupt(DATAPIN_5), getDataRequest(), FALLING);
-    attachInterrupt(digitalPinToInterrupt(DATAPIN_6), getDataRequest(), FALLING);
+    attachInterrupt(digitalPinToInterrupt(DATAPIN_1), getDataRequest, FALLING);
+    attachInterrupt(digitalPinToInterrupt(DATAPIN_2), getDataRequest, FALLING);
+    attachInterrupt(digitalPinToInterrupt(DATAPIN_3), getDataRequest, FALLING);
+    attachInterrupt(digitalPinToInterrupt(DATAPIN_4), getDataRequest, FALLING);
+    attachInterrupt(digitalPinToInterrupt(DATAPIN_5), getDataRequest, FALLING);
+    attachInterrupt(digitalPinToInterrupt(DATAPIN_6), getDataRequest, FALLING);
   }
-
- 
 }
