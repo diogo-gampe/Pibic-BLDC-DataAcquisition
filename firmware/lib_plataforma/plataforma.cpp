@@ -2,7 +2,7 @@
 #include "Arduino.h"
 #include "plataforma.h"
 
-signed long convert24bitstoLong(signed long value24bits){
+int convert24bitstoLong(int value24bits){
 
   value24bits  &= (0x00FFFFFF); //considera somente 24 bits menos significativos
 
@@ -31,21 +31,21 @@ Cel_Carga::Cel_Carga(uint8_t dataPin, uint8_t sckPin){
 
   }
 
-  void Cel_Carga::setOffset(float off) {
-  offset = off;
-  }
+  // void Cel_Carga::setOffset(float off) {
+  // tareOffset = off;
+  // }
 
-  void Cel_Carga::setScale(float scl) {
-  scale = scl;
-  }
+  // void Cel_Carga::setScale(float scl) {
+  // scale = scl;
+  // }
 
-  float Cel_Carga::getOffset(){
-  return offset;
-  }
+  // float Cel_Carga::getOffset(){
+  // return tareOffset;
+  // }
 
-  float Cel_Carga::getScale(){
-    return scale;
-  }
+  // float Cel_Carga::getScale(){
+  //   return scale;
+  // }
 
   float Cel_Carga::getSckPin(){
   return _sckPin;
@@ -55,45 +55,87 @@ Cel_Carga::Cel_Carga(uint8_t dataPin, uint8_t sckPin){
   return _dataPin;
   }
 
-  signed long Cel_Carga::readRaw(){
+  int Cel_Carga::readRaw(){
 
       //seta contagem para 0
-      signed long Count = 0;
+      int Count = 0;
 
       //Verifica se pino de dados está em 0 para indicar que está pronto para transmitir
       if(!digitalRead(_dataPin)){
+        lastDoutLowTime = micros();
       
-      //seta pino de clock para low para começar a puxar dados
-      digitalWrite(_sckPin, LOW);
-      delayMicroseconds(1);
+        //seta pino de clock para low para começar a puxar dados
+        digitalWrite(_sckPin, LOW);
+        delayMicroseconds(1);
 
-      //envia 24 pulsos para retirar bit a bit
-      for (char i=0; i < 24; i++){
+        //envia 24 pulsos para retirar bit a bit
+        for (char i=0; i < 24; i++){
 
-          digitalWrite(_sckPin, HIGH);
-          delayMicroseconds(1);
-          Count = Count << 1;
+            digitalWrite(_sckPin, HIGH);
+            delayMicroseconds(1);
+            Count = Count << 1;
 
-          //incrementa contagem se datapin alto
-          if(digitalRead(_dataPin)) 
-              Count++; 
+            //incrementa contagem se datapin alto
+            if(digitalRead(_dataPin)) 
+                Count++; 
 
-          digitalWrite(_sckPin, LOW);
-          delayMicroseconds(1);
-          
-              
+            digitalWrite(_sckPin, LOW);
+            delayMicroseconds(1);
+            
+                
+        }
+        digitalWrite(_sckPin, HIGH);
+        delayMicroseconds(1); 
+        //Count=Count^0x800000;
+        digitalWrite(_sckPin, LOW);
+        num_conversoes++;
       }
-      digitalWrite(_sckPin, HIGH);
-      delayMicroseconds(1); 
-      Count=Count^0x800000;
-      digitalWrite(_sckPin, LOW);
-      }
-
       return(Count);
 
     }
 
-    float Cel_Carga::getValue() {
-      signed long raw = readRaw();
-      return (convert24bitstoLong(raw) - offset) / scale;
+    //função bloqueante que espera sinal estar pronto para retornar valor da tara
+    float Cel_Carga::doTare(){
+
+      int timeStartTare = millis();
+
+      //espera 3 conversoes para estabilizar valor de tara 
+      tare = (float)readRaw(); 
+
+      Serial.print(" Palavra digital obtida em tara: ");
+      Serial.print(tare);
+      Serial.print(", tempo transcorrido na função doTare (ms): ");
+      Serial.print(millis() - timeStartTare); 
+      Serial.print(", Número de execução de tara: ");
+      Serial.println(num_conversoes);
+
+      return(tare);
+       
+    }
+
+    float Cel_Carga::doCalibration(float massa_g){
+      int timeStartCal = millis();
+
+        //acha coeficientes da linha m(p) = scale*p + offset onde 'p' é a palavra digital e 'm' a massa
+        //com os pontos (p1, 0) e (p2, m1) 
+
+        scale = massa_g / ((float)readRaw() - tare);
+        offset = -scale*tare;  
+
+        Serial.print("Valor de escala obtido em calibração: ");
+        Serial.print(scale, 8);
+        Serial.print(", Valor de offset obtido em calibração: ");
+        Serial.print(offset, 8);
+        Serial.print(", tempo transcorrido na função doCalibration (ms): ");
+        Serial.print(millis() - timeStartCal); 
+        Serial.print(", Número de execução de caliibração: ");
+        Serial.println(num_conversoes);
+
+      return(scale);
+
+    }
+
+    float Cel_Carga::getValue(float raw) {
+
+      return raw*scale + offset;
     }
