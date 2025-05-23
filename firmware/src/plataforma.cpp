@@ -137,5 +137,5 @@ Cel_Carga::Cel_Carga(uint8_t dataPin, uint8_t sckPin){
 
     float Cel_Carga::getValue() {
 
-      return((float)readRaw()*scale + offset);
+      return((float)convert24bitstoLong(readRaw())*scale + offset);
     }
