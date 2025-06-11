@@ -2,25 +2,36 @@
 #include "plataforma.h"
 
 
-#define CEL_CARGA_INFO_ADDRESS 0x00
-#define CALIBRATION_MASS 400 //iniciamos com 400g para calibração (valor arbitrário)
+// esse código servirá para obter as palavras digitais geradas pelo HX711 quando estimuladas
+// por um mesmo peso afim de obter uma distribuição probabilistica para a medição
+
+#define NUM_PESOS 3
+
 
 //variável para contar medições obtidas
-uint8_t i = 0;
-//vetor para armazenar medições de 6 células de carga
-int medicoes[NUM_MEDICOES] = {0, 0};
-int tempoCorrido[NUM_MEDICOES] = {0, 0};
+uint16_t count_medicoes = 0;
+uint8_t count_pesos = 0;
+
+//vetor para armazenar medições de uma única célula de carga com 
+int medicoes[NUM_PESOS][NUM_MEDICOES];
+int pesos[NUM_PESOS]; 
+
+//int tempoCorrido[NUM_MEDICOES];
 
 //variáveis para indicar que o hx711 indicou que está pronto para transmitir o dado
 volatile bool enData1 = false;
 volatile bool enData2 = false;
+// volatile bool enData3 = false;
+// volatile bool enData4 = false;
+// volatile bool enData5 = false;
+// volatile bool enData6 = false;
+
+bool resume = true; 
+bool done = true;
 
 int startTime; 
 
-// bool enData3 = false;
-// bool enData4 = false;
-// bool enData5 = false;
-// bool enData6 = false;
+
 
 //declarando objeto de celula de carga com seus respectivos pinos de dado e clock
 //função do construtor já declara pinos como saída/entrada
@@ -69,8 +80,8 @@ void setup() {
   digitalWrite(LED_BUILTIN, LOW);
   
   //declara pinos de interrupção na borda de descida, para chamar função getDataRequest
-  attachInterrupt(digitalPinToInterrupt(DATAPIN_1), getDataRequest, FALLING);
-  attachInterrupt(digitalPinToInterrupt(DATAPIN_2), getDataRequest, FALLING);
+  //attachInterrupt(digitalPinToInterrupt(DATAPIN_1), getDataRequest, FALLING);
+  //attachInterrupt(digitalPinToInterrupt(DATAPIN_2), getDataRequest, FALLING);
   // attachInterrupt(digitalPinToInterrupt(DATAPIN_3), getDataRequest, FALLING);
   // attachInterrupt(digitalPinToInterrupt(DATAPIN_4), getDataRequest, FALLING);
   // attachInterrupt(digitalPinToInterrupt(DATAPIN_5), getDataRequest, FALLING);
@@ -79,10 +90,8 @@ void setup() {
   //inicializa Serial
   Serial.begin(115200);
 
-  Serial.print("Para iniciar processo de medição aperte qualquer tecla: "); 
+  
   while(!Serial.available());
-  Serial.println("Iniciando processo de medição...");
-
   startTime = micros();
 
 }
@@ -90,32 +99,50 @@ void setup() {
 // the loop function runs over and over again forever
 void loop() {
   
+    if(resume){
+        //recebe valor do peso que será colocado na balança
+        Serial.print("Digite o valor do peso que deseja obter as medições: ");
+        while(!Serial.available());
+
+        peso = Serial.parseInt();
+        count_peso++; 
+
+        attachInterrupt(digitalPinToInterrupt(DATAPIN_1), getDataRequest, FALLING);
+
+        resume = false;
+    }
+
   //verifica quais dados estão prontos para começar o processo de transferência de dados
   if(enData1){
 
-    
-    //armazena tempo de obtenção do dado
-    tempoCorrido[0] = micros() - startTime; 
+
     //armazena valor digital bruto com extensão de sinal no vetor medicoes[]
-    medicoes[0] = celula1.getValue();
+    medicoes[count_peso - 1][count_medicoes] = celula1.getValue();
 
     //ao armazenar a medição desabilita interrupção do pino
     //aguarda obter uma medição de cada celula de carga para reestabelecer as interrupções
-    detachInterrupt(digitalPinToInterrupt(DATAPIN_1));
+    //detachInterrupt(digitalPinToInterrupt(DATAPIN_1));
 
     //incrementa variável para indicar o número de células que já armazenaram uma medição
-    i++;
+    count_medicoes++;
+
+    if(count_medicoes >= NUM_MEDICOES - 1){
+        resume = true; 
+        count_medicoes = 0;
+        if(conta_peso >= NUM_PESOS)
+            done = true;
+    }
   }
 
   
-  if(enData2){
-    //armazena tempo corrido entre quedas do sinal dout
-    tempoCorrido[1] = micros() - startTime; 
+//   if(enData2){
+//     //armazena tempo corrido entre quedas do sinal dout
+//     tempoCorrido[1] = micros() - startTime; 
 
-    medicoes[1] = celula2.getValue();
-    detachInterrupt(digitalPinToInterrupt(DATAPIN_2));
-    i++;
-  }
+//     medicoes[1] = celula2.getValue();
+//     detachInterrupt(digitalPinToInterrupt(DATAPIN_2));
+//     i++;
+//   }
  
  
   // if(enData3){
@@ -145,20 +172,20 @@ void loop() {
   
 
   //se forem efetuadas 6 medições transmite vetor por serial, reestabelece as interrupções e reseta variáveis
-  if(i >= NUM_MEDICOES - 1){
+  if(done){
 
+    for(int i = 0; i <= NUM_PESOS - 1; i++){
+        Serial.println(peso[i]);
+        for(uint8_t j = 0; j <= NUM_MEDICOES - 1; j++){
+        
+        Serial.print(medicoes[i][j]);;
+        Serial.print(", ");
 
-    for(uint8_t j = 0; j <= NUM_MEDICOES - 1; j++){
-      Serial.print("Celula ");
-      Serial.print(j+1);
-      Serial.print(": ");
-      Serial.print(medicoes[j]);
-      Serial.print(", tempo (us): ");
-      Serial.println(tempoCorrido[j]);
+        }        
     }
     
     enData1 = false;
-    enData2 = false;
+    //enData2 = false;
     // enData3 = false;
     // enData4 = false;
     // enData5 = false;

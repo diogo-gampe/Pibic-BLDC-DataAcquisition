@@ -32,7 +32,7 @@
 #define DATAPIN_6 8
 #define SCKPIN_6 9
 
-#define NUM_MEDICOES 2
+#define NUM_MEDICOES 25
 
 #define SIGNAL_TIMEOUT 400 //ms
 #define CALIB_TIMEOUT 2000 //ms

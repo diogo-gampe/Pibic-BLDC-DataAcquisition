@@ -64,8 +64,7 @@ tempos2 = df["tempo2"].values
 celulas2 = df["cel_med2"].values
 
 # 3. Configurar o gráfico
-plt.figure(figsize=(12, 6))
-
+plt.figure(1, figsize=(12, 6))
 # Plotar Célula 1 (pontos azuis)
 plt.scatter(
     tempos1, 
@@ -107,11 +106,6 @@ tempo_inicial = min(tempos1[0], tempos2[0])  # Começo dos dados
 plt.xlim(tempo_inicial - 10, tempo_inicial + 5000)  # Zoom nos primeiros 100ms
 plt.ylim(0, 800000)
 
-print(len(tempos1))
-print(len(tempos2))
-print(len(celulas1))
-print(len(celulas2))
-
 for t1, t2, y1, y2 in zip(tempos1, tempos2, celulas1, celulas2): 
     delta_t = abs(t2-t1)
     plt.annotate(f'Δt={delta_t}ms', 
@@ -125,3 +119,21 @@ print(df.head())
 # 7. Salvar e mostrar
 #plt.savefig("grafico_alta_resolucao.png", dpi=300)
 plt.show()
+
+h = 0.1024 #tempo de amostragem em segundos
+
+
+#cria vetor de tempos de amostragem
+T = np.arange(0, h, len(tempos1))
+
+coef_1 = np.polyfit(tempos1, celulas1, deg=2)
+regressao_1 = np.poly1d(coef_1)
+
+coef_2 = np.polyfit(tempos2, celulas2, deg=2)
+regressao_2 = np.poly1d(coef_2)
+
+forcas_interp_1 = regressao_1(T)
+forcas_interp_2 = regressao_2(T)
+
+print(coef_1)
+print(coef_2)
