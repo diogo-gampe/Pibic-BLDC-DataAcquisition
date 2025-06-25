@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 # Parâmetros da serial
 porta_serial = 'COM3'  # Ajuste conforme seu sistema
 baud_rate = 115200
-ser = serial.Serial(porta_serial, baud_rate, timeout=1)
+ser = serial.Serial(
+    porta_serial, baud_rate, timeout=1)
 
 
 # Lista de pesos a testar
