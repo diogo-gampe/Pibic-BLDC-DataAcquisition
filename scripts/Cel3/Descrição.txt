@@ -1,0 +1,7 @@
+
+
+medicao_peso1 contém medicoes com 50 g no sentido da seta.
+medicao_peso2 contém medicoes com 860 g no sentido da seta.
+
+medicao_peso3 contém medicoes com 50 g no sentido contrário da seta.
+medicao_peso4 contém medicoes com 860 g no sentido contrário da seta.

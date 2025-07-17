@@ -2,6 +2,89 @@
 #include "Arduino.h"
 #include "plataforma.h"
 
+uint32_t testTime = 0;
+uint32_t elapsedTest = 0; 
+
+void getPeriodicSamples(void){
+
+  
+  //armazena delta_t em estrutra
+  sync_data.delta_t = tempDelta_t; 
+
+  //efetua conversão e mede tempo gasto
+  uint32_t now = micros();
+  sync_data.tensao = analogRead(ADC_VOLT_PIN);
+  sync_data.corrente = analogRead(ADC_CURRENT_PIN);
+  elapsed = now - tesTime; 
+  testTime = now; 
+  //atualiza largura de pulso
+  updatePWMPulse();
+
+  //sinaliza armazenamento dos dados síncronos
+  syncDataReady = true; 
+}
+
+void onHallPulse(void){
+
+  uint32_t now = micros();
+  tempDelta_t = now - lastPulse; 
+  lasPulse = now; 
+
+
+}
+void updatePWMPulse() {
+  //Atualiza valor do pulso entre 1000 us e 2000 us
+  if (subindo) {
+    pulse_us += 10;
+    if (pulse_us >= MAX_PULSE_US) subindo = false;
+  } else {
+    pulse_us -= 10;
+    if (pulse_us <= MIN_PULSE_US) subindo = true;
+  }
+
+  PWM_Timer->setCaptureCompare(pwm_channel, pulse_us, MICROSEC_COMPARE_FORMAT);
+}
+
+
+void configSyncInterrupt(void){
+
+ // === CONFIGURAÇÃO DO TIMER DE INTERRUPÇÃO COM TIM2 ===
+  Update_Timer->setPrescaleFactor(72); // 1 MHz
+  Update_Timer->setOverflow(T, MICROSEC_FORMAT); //5ms -> 200 Hz
+
+  //define função a ser chamada a cada instante de amostragem
+  Update_Timer->attachInterrupt(updatePWM);
+
+  Update_Timer->resume();
+}
+
+
+void configPWM(void){
+
+  PWM_Timer->setPrescaleFactor(72); // 72 MHz / 72 = 1 MHz (1 us por tick)
+  PWM_Timer->setOverflow(PWM_PERIOD, MICROSEC_FORMAT); // 200 Hz → 5 ms
+
+  //seta modo do PWM ==> TIM_OCMODE_PWM1            pino alto quando counter < channel , baixo c.c
+  PWM_Timer->setMode(pwm_channel, TIMER_OUTPUT_COMPARE_PWM1, PWM_PIN);
+
+  //seta valor da comparação nos registradores a partir de duração
+  PWM_Timer->setCaptureCompare(pwm_channel, MIN_PULSE_US, MICROSEC_COMPARE_FORMAT);
+  
+
+  PWM_Timer->resume();
+
+}
+
+void getDataRequest(void){
+
+  //verifica os pinos que estão em estado lógico zero para identificar quais estão prontos
+  //para transmitir
+  if(!digitalRead(DATAPIN_1)){
+    enData1 = true; 
+
+  }
+}
+
 int convert24bitstoLong(int value24bits){
 
   value24bits  &= (0x00FFFFFF); //considera somente 24 bits menos significativos
