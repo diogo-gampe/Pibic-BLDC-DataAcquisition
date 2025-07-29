@@ -1,79 +1,15 @@
 
 #include "Arduino.h"
-#include "plataforma.h"
+#include "loadCell.h"
+#include "peripherals.h"
 
-uint32_t testTime = 0;
-uint32_t elapsedTest = 0; 
+volatile bool enData1 = false;
+bool leituraValidaValor = true;
+bool* leituraValida = &leituraValidaValor;
 
-void getPeriodicSamples(void){
+volatile async_data HX711_data = { 0 };
 
-  
-  //armazena delta_t em estrutra
-  sync_data.delta_t = tempDelta_t; 
-
-  //efetua conversão e mede tempo gasto
-  uint32_t now = micros();
-  sync_data.tensao = analogRead(ADC_VOLT_PIN);
-  sync_data.corrente = analogRead(ADC_CURRENT_PIN);
-  elapsed = now - tesTime; 
-  testTime = now; 
-  //atualiza largura de pulso
-  updatePWMPulse();
-
-  //sinaliza armazenamento dos dados síncronos
-  syncDataReady = true; 
-}
-
-void onHallPulse(void){
-
-  uint32_t now = micros();
-  tempDelta_t = now - lastPulse; 
-  lasPulse = now; 
-
-
-}
-void updatePWMPulse() {
-  //Atualiza valor do pulso entre 1000 us e 2000 us
-  if (subindo) {
-    pulse_us += 10;
-    if (pulse_us >= MAX_PULSE_US) subindo = false;
-  } else {
-    pulse_us -= 10;
-    if (pulse_us <= MIN_PULSE_US) subindo = true;
-  }
-
-  PWM_Timer->setCaptureCompare(pwm_channel, pulse_us, MICROSEC_COMPARE_FORMAT);
-}
-
-
-void configSyncInterrupt(void){
-
- // === CONFIGURAÇÃO DO TIMER DE INTERRUPÇÃO COM TIM2 ===
-  Update_Timer->setPrescaleFactor(72); // 1 MHz
-  Update_Timer->setOverflow(T, MICROSEC_FORMAT); //5ms -> 200 Hz
-
-  //define função a ser chamada a cada instante de amostragem
-  Update_Timer->attachInterrupt(updatePWM);
-
-  Update_Timer->resume();
-}
-
-
-void configPWM(void){
-
-  PWM_Timer->setPrescaleFactor(72); // 72 MHz / 72 = 1 MHz (1 us por tick)
-  PWM_Timer->setOverflow(PWM_PERIOD, MICROSEC_FORMAT); // 200 Hz → 5 ms
-
-  //seta modo do PWM ==> TIM_OCMODE_PWM1            pino alto quando counter < channel , baixo c.c
-  PWM_Timer->setMode(pwm_channel, TIMER_OUTPUT_COMPARE_PWM1, PWM_PIN);
-
-  //seta valor da comparação nos registradores a partir de duração
-  PWM_Timer->setCaptureCompare(pwm_channel, MIN_PULSE_US, MICROSEC_COMPARE_FORMAT);
-  
-
-  PWM_Timer->resume();
-
-}
+uint32_t endConversionTime = 0; 
 
 void getDataRequest(void){
 
@@ -97,6 +33,7 @@ int convert24bitstoLong(int value24bits){
 
   }
   else{
+    
     return value24bits;
   }
 }
@@ -138,15 +75,17 @@ Cel_Carga::Cel_Carga(uint8_t dataPin, uint8_t sckPin){
   return _dataPin;
   }
 
-  int Cel_Carga::readRaw(){
+  int Cel_Carga::readRaw(bool* leituraValida){
 
       //seta contagem para 0
       int Count = 0;
+      *leituraValida = true; 
 
       //Verifica se pino de dados está em 0 para indicar que está pronto para transmitir
       if(!digitalRead(_dataPin)){
-        lastDoutLowTime = micros();
-      
+        
+        uint32_t t0 = isrSyncCounter; 
+        uint32_t startConversionTime = micros();
         //seta pino de clock para low para começar a puxar dados
         digitalWrite(_sckPin, LOW);
         delayMicroseconds(1);
@@ -164,14 +103,19 @@ Cel_Carga::Cel_Carga(uint8_t dataPin, uint8_t sckPin){
 
             digitalWrite(_sckPin, LOW);
             delayMicroseconds(1);
-            
-                
         }
         digitalWrite(_sckPin, HIGH);
         delayMicroseconds(1); 
         //Count=Count^0x800000;
         digitalWrite(_sckPin, LOW);
-        num_conversoes++;
+
+        //ao fim dos pulsos verifica se pulsos de clock foram interrompidos por outra ISR
+        uint32_t t1 = isrSyncCounter; 
+
+        //caso sim retorna leitura invalida
+        *leituraValida = (t1 != t0) ? false : true; 
+        
+        endConversionTime = micros() - startConversionTime; 
       }
       return(Count);
 
@@ -183,7 +127,7 @@ Cel_Carga::Cel_Carga(uint8_t dataPin, uint8_t sckPin){
       int timeStartTare = millis();
 
       //espera 3 conversoes para estabilizar valor de tara 
-      tare = (float)convert24bitstoLong(readRaw()); 
+      tare = (float)convert24bitstoLong(readRaw(leituraValida)); 
 
       Serial.print(" Palavra digital obtida em tara: ");
       Serial.print(tare);
@@ -202,7 +146,7 @@ Cel_Carga::Cel_Carga(uint8_t dataPin, uint8_t sckPin){
         //acha coeficientes da linha m(p) = scale*p + offset onde 'p' é a palavra digital e 'm' a massa
         //com os pontos (p1, 0) e (p2, m1) 
 
-        scale = massa_g / ((float)convert24bitstoLong(readRaw()) - tare);
+        scale = massa_g / ((float)convert24bitstoLong(readRaw(leituraValida)) - tare);
         offset = -scale*tare;  
 
         Serial.print("Valor de escala obtido em calibração: ");
@@ -220,5 +164,5 @@ Cel_Carga::Cel_Carga(uint8_t dataPin, uint8_t sckPin){
 
     float Cel_Carga::getValue() {
 
-      return((float)convert24bitstoLong(readRaw())*scale + offset);
+      return((float)convert24bitstoLong(readRaw(leituraValida))*scale + offset);
     }

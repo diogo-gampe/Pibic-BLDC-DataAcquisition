@@ -2,6 +2,7 @@
 
 #include "Arduino.h"
 #include "peripherals.h"
+#include "loadCell.h"
 
 
 //descobre canal e Timer associado ao pino 
@@ -15,6 +16,7 @@ TIM_TypeDef *PWM_Instance = (TIM_TypeDef *)pinmap_peripheral(digitalPinToPinName
 //nesse caso que PB1 é o pino do PWM Timer1 é o timer associado
 //se precisar mudar de pino PWM é preciso garantir que o pino associado não será o timer da interrupção períodica
 HardwareTimer *PWM_Timer = new HardwareTimer(PWM_Instance);
+HardwareTimer *Update_Timer = new HardwareTimer(TIM3);
 
 //contador de tempo para ISR períodica
 uint32_t elapsedTest_Sync = 0; 
@@ -31,7 +33,6 @@ volatile uint32_t isrSyncCounter = 0;
 
 //endereço para DMA
 volatile uint16_t adcBuffer[2];
-
 
 //variavel para armazaenar largura do pulso pwm
 //static garante única definição para ser usada no escopo desse arquivo cpp
@@ -70,7 +71,6 @@ void updatePWMPulse() {
 
   PWM_Timer->setCaptureCompare(pwm_channel, pulse_us, MICROSEC_COMPARE_FORMAT);
 }
-
 
 void getPeriodicSamples(void){
 
@@ -215,9 +215,9 @@ void Interrupts(void){
   Update_Timer->attachInterrupt(getPeriodicSamples);
 }
 
-void noInterrupts(void){
+void disableInterrupts(void){
   detachInterrupt(digitalPinToInterrupt(DATAPIN_1));
-  attachInterrupt(digitalPinToInterrupt(HALL_PIN));
+  detachInterrupt(digitalPinToInterrupt(HALL_PIN));
   Update_Timer->detachInterrupt();
 }
 

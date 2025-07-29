@@ -1,14 +1,14 @@
 
-#ifndef peripherals_h
-#define peripherals_h
+#ifndef PERIPHERALS_H
+#define PERIPHERALS_H
 
 /*  ~ Definindo pinos, funções de configurações e interrupções gerados pelos periféricos
     ~ ADC + DMA + Timer3 + Timer2 + Pino do Efeito Hall
 
 */
 
-//Define pinos
-//não mexer no pino PWM PODE DESCONFIGURAR TIMER DA INTERRUPÇÃO PERIÓDICA
+//*Define pinos
+//!!NÃO MEXER NO PINO PWM!!! PODE DESCONFIGURAR TIMER DA INTERRUPÇÃO PERIÓDICA
 #define PWM_PIN PB1
 #define ADC_CURRENT_PIN PA0
 #define ADC_VOLT_PIN PA1
@@ -27,9 +27,12 @@
 
 //Objetos Hardware Timer do stm32duino um para ISR e outro para PWM
 extern HardwareTimer *Update_Timer; 
-extern HardwareTimer *PWM_Timer
+extern HardwareTimer *PWM_Timer;
+
 extern uint32_t elapsedTest_Sync;  
 extern volatile uint16_t adcBuffer[2];
+extern volatile uint32_t isrSyncCounter;
+extern volatile bool syncDataReady; 
 
 //define tipo de struct para armazenar valores das medições síncronas
 typedef struct {
@@ -44,9 +47,11 @@ typedef struct {
 //variável externa para armazenar dados de ISR
 extern volatile sync_data ISR_data;  
 
+void onHallPulse(void);
+
 //funções para habilitar e desabilitar TODAS interrupções
 void Interrupts(void);
-void noInterrupts(void);
+void disableInterrupts(void);
 
 //função de interrupção períodica de amostragem
 void getPeriodicSamples(void); 
@@ -65,3 +70,4 @@ void configADC(void);
 
 //configura DMA para armazenar valores ADC.
 void configDMA(void);
+#endif
